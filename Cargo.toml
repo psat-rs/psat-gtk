@@ -1,0 +1,8 @@
+[package]
+name = "psat-gtk"
+version = "0.1.0"
+authors = ["Colin Reeder <vpzomtrrfrt@gmail.com>"]
+
+[dependencies]
+gtk = "0.4.0"
+psat = { path = "../psat" }
