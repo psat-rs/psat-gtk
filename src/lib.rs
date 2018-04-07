@@ -9,19 +9,19 @@ pub struct PsatWindow {
 }
 
 impl psat::Target for PsatWindow {
-    type Component = gtk::Widget;
+    type Component = GtkWidget;
     type Context = ();
     fn get_context(&mut self) -> &Self::Context {
         &()
     }
     fn set_root(&mut self, widget: Self::Component) {
-        self.window.add(&widget);
+        self.window.add(&widget.as_native());
     }
 }
 
 struct ChildAccessWrapper<'a, T: 'a> {
     container: &'a mut T,
-    children_cache: Vec<gtk::Widget>
+    children_cache: Vec<GtkWidget>
 }
 
 impl<'a, T> std::ops::Deref for ChildAccessWrapper<'a, T> {
@@ -31,11 +31,12 @@ impl<'a, T> std::ops::Deref for ChildAccessWrapper<'a, T> {
     }
 }
 
-impl<'a, T: gtk::BoxExt + gtk::ContainerExt> psat::ChildAccess<'a, gtk::Widget> for ChildAccessWrapper<'a, T> {
+impl<'a, T: gtk::BoxExt + gtk::ContainerExt> psat::ChildAccess<'a, GtkWidget> for ChildAccessWrapper<'a, T> {
     fn len(&self) -> usize {
         self.get_children().len()
     }
-    fn insert(&mut self, index: usize, item: gtk::Widget) {
+    fn insert(&mut self, index: usize, item: GtkWidget) {
+        let item = item.as_native();
         self.pack_start(&item, false, false, 0);
         self.reorder_child(&item, index as i32);
     }
@@ -48,19 +49,42 @@ impl<'a, T: gtk::BoxExt + gtk::ContainerExt> psat::ChildAccess<'a, gtk::Widget> 
             widget.destroy();
         }
     }
-    fn get_mut(&mut self, index: usize) -> Option<&mut gtk::Widget> {
-        self.children_cache = self.get_children();
-        Some(&mut self.children_cache[index])
+    fn get_mut(&mut self, index: usize) -> Option<&mut GtkWidget> {
+        self.children_cache = self.get_children()
+            .into_iter()
+            .map(|x| GtkWidget::from_native(x))
+            .collect();
+        if self.children_cache.len() > index {
+            Some(&mut self.children_cache[index])
+        }
+        else {
+            None
+        }
     }
 }
 
-// please tell me there's a better way to do this
-fn modify_as<T: gtk::IsA<gtk::Widget>, F: Fn(&mut T) -> ()>(widget: &mut gtk::Widget, f: F) {
-    let mut casted: T = {
-        let widget = widget.to_owned();
-        widget.downcast().unwrap()
-    };
-    f(&mut casted);
+pub enum GtkWidget {
+    Button(gtk::Button),
+    Box(gtk::Box)
+}
+
+impl GtkWidget {
+    fn as_native(self) -> gtk::Widget {
+        match self {
+            GtkWidget::Button(b) => b.upcast(),
+            GtkWidget::Box(b) => b.upcast()
+        }
+    }
+    fn from_native(widget: gtk::Widget) -> GtkWidget {
+        match widget.downcast::<gtk::Button>() {
+            Ok(b) => GtkWidget::Button(b),
+            Err(widget) =>
+                match widget.downcast::<gtk::Box>() {
+                    Ok(b) => GtkWidget::Box(b),
+                    Err(_) => panic!("Unexpected component type")
+                }
+        }
+    }
 }
 
 pub struct ButtonComponent {}
@@ -73,13 +97,16 @@ pub struct ButtonProps {
 
 impl psat::NativeComponent<PsatWindow> for ButtonComponent {
     type Props = ButtonProps;
-    fn create(&self, _: &()) -> gtk::Widget {
-        gtk::Button::new().upcast()
+    fn create(&self, _: &()) -> GtkWidget {
+        GtkWidget::Button(gtk::Button::new())
     }
-    fn reconcile(&self, _: &(), component: &mut gtk::Widget, props: &Self::Props, _: &Vec<psat::VNode<PsatWindow>>) {
-        modify_as(component, |btn: &mut gtk::Button| {
-            btn.set_label(&props.label);
-        });
+    fn reconcile(&self, _: &(), component: &mut GtkWidget, props: &Self::Props, _: &Vec<psat::VNode<PsatWindow>>) {
+        match component {
+            &mut GtkWidget::Button(ref mut btn) => {
+                btn.set_label(&props.label);
+            },
+            _ => eprintln!("Component was not a button!")
+        }
     }
 }
 
@@ -88,24 +115,27 @@ pub struct BoxComponent {}
 pub const BOX: BoxComponent = BoxComponent {};
 
 pub struct BoxProps {
-    orientation: gtk::Orientation,
-    spacing: i32
+    pub orientation: gtk::Orientation,
+    pub spacing: i32
 }
 
 impl psat::NativeComponent<PsatWindow> for BoxComponent {
     type Props = BoxProps;
-    fn create(&self, _: &()) -> gtk::Widget {
-        gtk::Box::new(gtk::Orientation::Horizontal, 0).upcast()
+    fn create(&self, _: &()) -> GtkWidget {
+        GtkWidget::Box(gtk::Box::new(gtk::Orientation::Horizontal, 0))
     }
     fn reconcile(&self,
                  context: &(),
-                 component: &mut gtk::Widget,
+                 component: &mut GtkWidget,
                  props: &Self::Props,
                  children: &Vec<psat::VNode<PsatWindow>>) {
-        modify_as(component, |b: &mut gtk::Box| {
-            b.set_orientation(props.orientation);
-            b.set_spacing(props.spacing);
-            psat::reconcile_children(context, children, &mut ChildAccessWrapper {container: b, children_cache: vec![]});
-        });
+        match component {
+            &mut GtkWidget::Box(ref mut b) => {
+                b.set_orientation(props.orientation);
+                b.set_spacing(props.spacing);
+                psat::reconcile_children(context, children, &mut ChildAccessWrapper {container: b, children_cache: vec![]});
+            },
+            _ => eprintln!("Component was not a box!")
+        }
     }
 }
