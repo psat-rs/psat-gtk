@@ -48,7 +48,7 @@ impl<'a, T: gtk::BoxExt + gtk::ContainerExt> psat::ChildAccess<'a, gtk::Widget> 
             widget.destroy();
         }
     }
-    fn get_mut<'b>(&mut self, index: usize) -> Option<&'b mut gtk::Widget> {
+    fn get_mut(&mut self, index: usize) -> Option<&mut gtk::Widget> {
         self.children_cache = self.get_children();
         Some(&mut self.children_cache[index])
     }
