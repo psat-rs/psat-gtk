@@ -10,7 +10,15 @@ fn main() {
     let window = gtk::Window::new(gtk::WindowType::Toplevel);
     let mut window = psat_gtk::PsatWindow { window };
 
-    let node = psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {label: "a button".to_owned(), ..Default::default()}, vec![]);
+    let click_handler = std::sync::Arc::new(|| {
+        println!("clicked!");
+    });
+
+    let node = psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {
+        label: "a button".to_owned(),
+        on_click: Some(click_handler),
+        ..Default::default()
+    }, vec![]);
 
     psat::render(&mut window, &node);
 

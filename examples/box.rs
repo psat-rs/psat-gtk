@@ -15,8 +15,8 @@ fn main() {
         orientation: gtk::Orientation::Horizontal,
         spacing: 0
     }, vec![
-        psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {label: "a button".to_owned()}, vec![]),
-        psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {label: "button 2".to_owned()}, vec![])
+        psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {label: "a button".to_owned(), ..Default::default()}, vec![]),
+        psat::h(psat_gtk::BUTTON, psat_gtk::ButtonProps {label: "button 2".to_owned(), ..Default::default()}, vec![])
     ]);
 
     psat::render(&mut window, &node);

@@ -1,8 +1,10 @@
 pub extern crate gtk;
 extern crate psat;
+#[macro_use] extern crate lazy_static;
 
 use gtk::{BoxExt, ButtonExt, ContainerExt, OrientableExt, WidgetExt};
 use gtk::Cast;
+use std::collections::HashMap;
 
 pub struct PsatWindow {
     pub window: gtk::Window
@@ -63,6 +65,12 @@ impl<'a, T: gtk::BoxExt + gtk::ContainerExt> psat::ChildAccess<'a, GtkWidget> fo
     }
 }
 
+lazy_static! {
+    static ref CALLBACKS: std::sync::RwLock<HashMap<(u64, String), Option<std::sync::Arc<Fn() + Sync + Send>>>> = {
+        std::sync::RwLock::new(HashMap::new())
+    };
+}
+
 pub enum GtkWidget {
     Button(gtk::Button),
     Box(gtk::Box)
@@ -87,12 +95,36 @@ impl GtkWidget {
     }
 }
 
+type UsedHasher = std::collections::hash_map::DefaultHasher;
+
+/*fn make_callback<T: std::hash::Hash>(signal: String) -> Box<Fn(&T)> {
+    Box::new(|widget: &T| {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = UsedHasher::new();
+        widget.hash(&mut hasher);
+        let hash = hasher.finish();
+        CALLBACKS.read().unwrap()[&(hash, signal)]();
+    })
+}*/
+
+fn clicked_callback<T: std::hash::Hash>(widget: &T) {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = UsedHasher::new();
+    widget.hash(&mut hasher);
+    let hash = hasher.finish();
+    if let Some(ref f) = CALLBACKS.read().unwrap()[&(hash, "clicked".to_owned())] {
+        f();
+    }
+}
+
 pub struct ButtonComponent {}
 
 pub const BUTTON: ButtonComponent = ButtonComponent {};
 
+#[derive(Default)]
 pub struct ButtonProps {
-    pub label: String
+    pub label: String,
+    pub on_click: Option<std::sync::Arc<Fn() + Send + Sync>>
 }
 
 impl psat::NativeComponent<PsatWindow> for ButtonComponent {
@@ -104,6 +136,17 @@ impl psat::NativeComponent<PsatWindow> for ButtonComponent {
         match component {
             &mut GtkWidget::Button(ref mut btn) => {
                 btn.set_label(&props.label);
+
+                use std::hash::{Hash, Hasher};
+
+                let mut hasher = UsedHasher::new();
+                btn.hash(&mut hasher);
+                let hash = hasher.finish();
+
+                let needs_callback = CALLBACKS.write().unwrap().insert((hash, "clicked".to_owned()), props.on_click.clone()).is_none();
+                if needs_callback {
+                    btn.connect_clicked(clicked_callback);
+                }
             },
             _ => eprintln!("Component was not a button!")
         }
